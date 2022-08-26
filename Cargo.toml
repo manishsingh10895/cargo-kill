@@ -1,11 +1,11 @@
 [package]
 name = "cargo-kill-all"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["manishsingh10895 <manishsingh10895@gmail.com>"]
 description = "Remove old node_modules, cargo target to save space"
 readme = "README.md"
-repository = "https://github.com/manishsing10895/cargo-kill"
+repository = "https://github.com/manishsingh10895/cargo-kill"
 rust_version = "1.63.0"
 license = "MIT OR Apache-2.0"
 
