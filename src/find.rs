@@ -54,6 +54,7 @@ impl ProjectTargetAnalysis {
                 // Else path is a directory
                 // recursive scan path and accumulate
                 // len and max
+
                 let x = path
                     .read_dir()
                     .unwrap()

@@ -62,8 +62,6 @@ fn main() {
 
     let args = KillArgs::parse_from(args);
 
-    println!("{:?}", args);
-
     let mut projects = analyze_all_projects(
         &Path::new(&args.root_dir),
         args.num_threads,
@@ -120,6 +118,13 @@ fn main() {
         return;
     }
 
+    // Exit if no projects are selected
+    if selected_projects.len() == 0 {
+        println!("No projects selected, exiting ...");
+        return;
+    }
+
+    // Ask user for confirmation if `yes` argument not provided
     if !args.yes {
         let ans = inquire::Confirm::new("Do you want to delete the selected folders?")
             .with_default(false)
@@ -127,6 +132,7 @@ fn main() {
             .prompt();
 
         match ans {
+            // User selected `No` exit
             Ok(false) => {
                 println!("No cleanup ahead");
                 return;

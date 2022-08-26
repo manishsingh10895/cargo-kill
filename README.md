@@ -17,5 +17,9 @@ Use -p npm to delete all node_modules and `-p cargo` to delete `target` from **c
 ## This project is heavily inspired by [dnlmlr's](https://github.com/dnlmlr) crate 
 [cargo-clean-all](https://github.com/dnlmlr/cargo-clean-all) 
 
+### Demo
+
+![Demo](./demo.png "Demo")
+
 
 If you like this project, go check that out too
