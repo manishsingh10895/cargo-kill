@@ -1,6 +1,6 @@
 [package]
 name = "cargo-kill-all"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["manishsingh10895 <manishsingh10895@gmail.com>"]
 description = "Remove old node_modules, cargo target to save space"
