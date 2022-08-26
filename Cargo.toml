@@ -2,7 +2,7 @@
 name = "cargo-kill-all"
 version = "0.1.0"
 edition = "2021"
-authors = ["manishsing10895 <manishsing10895@gmail.com>"]
+authors = ["manishsingh10895 <manishsingh10895@gmail.com>"]
 description = "Remove old node_modules, cargo target to save space"
 readme = "README.md"
 repository = "https://github.com/manishsing10895/cargo-kill"
