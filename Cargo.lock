@@ -59,7 +59,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cargo-kill"
+name = "cargo-kill-all"
 version = "0.1.0"
 dependencies = [
  "bytefmt",

@@ -1,5 +1,5 @@
 [package]
-name = "cargo-kill"
+name = "cargo-kill-all"
 version = "0.1.0"
 edition = "2021"
 authors = ["manishsing10895 <manishsing10895@gmail.com>"]
