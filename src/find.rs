@@ -4,6 +4,8 @@ use std::{
     time::SystemTime,
 };
 
+use std::cmp::max;
+
 use crossbeam_channel::Sender;
 
 use crate::{utils, ProjectType};
@@ -25,7 +27,7 @@ pub struct ProjectTargetAnalysis {
 impl Display for ProjectTargetAnalysis {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let size = bytefmt::format(self.size);
-        write!(f, "{} | {}", self.project_path.to_str().unwrap(), size,)
+        write!(f, "{0} \t| {1}", self.project_path.to_str().unwrap(), size,)
     }
 }
 
@@ -70,6 +72,9 @@ impl ProjectTargetAnalysis {
     // Analyze size and last_modified of the folders
 }
 
+/// Find projects in the given path
+/// that match the given `ProjectType`
+/// and send the results to the `results` channel
 fn find_projects_in_path(
     path: &Path,
     project_type: ProjectType,
@@ -101,7 +106,7 @@ fn find_projects_in_path(
                                       // Consumes the iterator
 
     // Check if this path has `relevant project_identifier (pakage.json, Cargo.toml)`
-    let has_project_modifier = files
+    let has_project_identifier = files
         .iter()
         .filter(|file| file.file_name().unwrap_or_default().to_string_lossy() == project_identifier)
         .count()
@@ -113,7 +118,7 @@ fn find_projects_in_path(
     for dir in dirs {
         let filename = dir.file_name().unwrap_or_default().to_string_lossy();
 
-        if filename.as_ref() == target_directory_name && has_project_modifier {
+        if filename.as_ref() == target_directory_name && has_project_identifier {
             has_target = true;
         } else {
             if EXCLUDE_DIRS.contains(&filename.as_ref()) {
@@ -137,7 +142,7 @@ fn find_projects_in_path(
             format!("Analyzing {}", &path.to_string_lossy()).into(),
         );
         results.send(ProjectTargetAnalysis::analyze(&path)).unwrap();
-        sp.stop();
+        sp.stop_with_symbol("✓");
         println!("\r");
     }
 }
@@ -148,9 +153,7 @@ pub fn analyze_all_projects(
     mut num_threads: usize,
     project_type: ProjectType,
 ) -> Vec<ProjectTargetAnalysis> {
-    if num_threads > num_cpus::get() || num_threads == 0 {
-        num_threads = num_cpus::get();
-    }
+    num_threads = std::cmp::min(num_cpus::get(), num_threads);
 
     println!("Using {} threads", num_threads);
 

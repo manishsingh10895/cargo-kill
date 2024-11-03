@@ -6,6 +6,7 @@ use inquire::{
     ui::{IndexPrefix, RenderConfig},
     MultiSelect,
 };
+use std::cmp::Reverse;
 use std::path::Path;
 
 mod find;
@@ -43,7 +44,7 @@ struct KillArgs {
         short = 't',
         long = "threads",
         value_name = "THREADS",
-        default_value_t = 1
+        default_value_t = 4
     )]
     num_threads: usize,
 
@@ -70,7 +71,7 @@ fn main() {
 
     let mut _options: Vec<&str> = vec![];
 
-    projects.sort_by_key(|p| p.size);
+    projects.sort_by_key(|p| Reverse(p.size));
 
     // Directory name to delete
     let (_, target_directory_name) = utils::get_project_indentifiers(args.project_type.clone());
@@ -108,7 +109,7 @@ fn main() {
     let selected_total_size: u64 = selected_projects.iter().map(|x| x.size).sum();
 
     println!(
-        "\n{} Folders to be removed\ntotal space to be freed {}",
+        "\n{} Folders to be removed\nTotal space to be freed {}",
         selected_projects.len(),
         bytefmt::format(selected_total_size)
     );
@@ -128,7 +129,7 @@ fn main() {
     if !args.yes {
         let ans = inquire::Confirm::new("Do you want to delete the selected folders?")
             .with_default(false)
-            .with_help_message("This actions is permanent")
+            .with_help_message("This action is permanent")
             .prompt();
 
         match ans {
@@ -142,7 +143,10 @@ fn main() {
         }
     }
 
-    let mut sp = spinners::Spinner::new(spinners::Spinners::Dots, String::from("Deleting folders"));
+    let mut sp = spinners::Spinner::new(
+        spinners::Spinners::Dots,
+        String::from("Deleting dependency folders"),
+    );
 
     selected_projects.iter().for_each(|p| {
         match remove_dir_all::remove_dir_all(&p.project_path.join(target_directory_name)) {
