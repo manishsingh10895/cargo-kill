@@ -50,6 +50,11 @@ struct KillArgs {
 
     #[clap(short = 'p', long = "project-type", value_enum, default_value_t = ProjectType::Cargo)]
     project_type: ProjectType,
+
+    /// Also include each project's `.git` directory as a deletion candidate.
+    /// Destructive: this wipes the repository's local history. Off by default.
+    #[clap(long = "include-git")]
+    include_git: bool,
 }
 
 fn main() {
@@ -66,6 +71,7 @@ fn main() {
         &Path::new(&args.root_dir),
         args.num_threads,
         args.project_type.clone(),
+        args.include_git,
     );
 
     projects.sort_by_key(|p| Reverse(p.size));

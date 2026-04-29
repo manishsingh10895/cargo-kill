@@ -39,7 +39,12 @@ impl Display for ProjectTargetAnalysis {
     }
 }
 
-struct Job(PathBuf, ProjectType, Sender<Job>);
+struct Job {
+    path: PathBuf,
+    project_type: ProjectType,
+    include_git: bool,
+    job_sender: Sender<Job>,
+}
 
 impl ProjectTargetAnalysis {
     fn analyze(path: &Path, targets: Vec<&'static str>) -> Self {
@@ -103,6 +108,7 @@ impl ProjectTargetAnalysis {
 fn find_projects_in_path(
     path: &Path,
     project_type: ProjectType,
+    include_git: bool,
     job_sender: Sender<Job>,
     results: Sender<ProjectTargetAnalysis>,
 ) {
@@ -131,7 +137,11 @@ fn find_projects_in_path(
     // Per-project candidate target list (e.g. for npm: node_modules + framework caches
     // declared in package.json). Empty for non-projects.
     let candidate_targets: Vec<&'static str> = if has_project_identifier {
-        utils::target_dirs_for(&project_type, path)
+        let mut t = utils::target_dirs_for(&project_type, path);
+        if include_git {
+            t.push(".git");
+        }
+        t
     } else {
         vec![]
     };
@@ -160,11 +170,12 @@ fn find_projects_in_path(
         }
 
         job_sender
-            .send(Job(
-                dir.to_path_buf(),
-                project_type.clone(),
-                job_sender.clone(),
-            ))
+            .send(Job {
+                path: dir.to_path_buf(),
+                project_type: project_type.clone(),
+                include_git,
+                job_sender: job_sender.clone(),
+            })
             .unwrap();
     }
 
@@ -186,6 +197,7 @@ pub fn analyze_all_projects(
     path: &Path,
     mut num_threads: usize,
     project_type: ProjectType,
+    include_git: bool,
 ) -> Vec<ProjectTargetAnalysis> {
     num_threads = std::cmp::min(num_cpus::get(), num_threads);
 
@@ -200,14 +212,26 @@ pub fn analyze_all_projects(
             .map(|_| (job_receiver.clone(), result_sender.clone()))
             .for_each(|(jr, rs)| {
                 std::thread::spawn(move || {
-                    jr.into_iter()
-                        .for_each(|job| find_projects_in_path(&job.0, job.1, job.2, rs.clone()))
+                    jr.into_iter().for_each(|job| {
+                        find_projects_in_path(
+                            &job.path,
+                            job.project_type,
+                            job.include_git,
+                            job.job_sender,
+                            rs.clone(),
+                        )
+                    })
                 });
             });
 
         job_sender
             .clone()
-            .send(Job(path.to_path_buf(), project_type, job_sender))
+            .send(Job {
+                path: path.to_path_buf(),
+                project_type,
+                include_git,
+                job_sender,
+            })
             .unwrap();
 
         result_receiver

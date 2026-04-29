@@ -29,6 +29,14 @@ Use `-p npm` to clean Node projects and `-p cargo` to clean **cargo** projects.
   all its detected directories; selecting it removes all of them. Projects
   with no recognized framework dep just clean `node_modules` as before.
 
+### Including `.git`
+
+Pass `--include-git` to also list each project's `.git` directory as a
+deletion candidate. Only `.git` directories that sit alongside a detected
+project (`Cargo.toml` or `package.json`) are considered. **This wipes the
+local repository history** — you will see `.git` listed in the project's row
+before confirming.
+
 ![Usage](./usage.png "Usage")
 
 ## This project is heavily inspired by [dnlmlr's](https://github.com/dnlmlr) crate
