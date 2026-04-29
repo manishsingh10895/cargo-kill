@@ -1,6 +1,6 @@
 # Cargo Kill
 
-### Remove `target`|`node_modules` recursively from directories
+### Remove `target` / `node_modules` (and framework caches) recursively from directories
 
 ## Installation
 
@@ -10,7 +10,24 @@
 
 > `cargo-kill-all /home/Documents/ -t 4 -p [npm/cargo]`
 
-Use -p npm to delete all node_modules and `-p cargo` to delete `target` from **cargo** projects
+Use `-p npm` to clean Node projects and `-p cargo` to clean **cargo** projects.
+
+### What gets cleaned
+
+- **`-p cargo`** — `target/` next to every `Cargo.toml`.
+- **`-p npm`** — `node_modules/` next to every `package.json`, plus framework
+  build/cache directories detected by parsing the project's `package.json`
+  dependencies:
+
+  | Dependency       | Cache directories       |
+  | ---------------- | ----------------------- |
+  | `next`           | `.next`                 |
+  | `nuxt` / `nuxt3` | `.nuxt`, `.output`      |
+  | `@sveltejs/kit`  | `.svelte-kit`           |
+
+  Each project shows up as a single selectable row whose size is the sum of
+  all its detected directories; selecting it removes all of them. Projects
+  with no recognized framework dep just clean `node_modules` as before.
 
 ![Usage](./usage.png "Usage")
 

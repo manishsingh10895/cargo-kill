@@ -57,10 +57,9 @@ fn main() {
 
     // When called using `cargo kill-all` the argument `kill-all` is inserted.
     // It is not required, so remove  it
-    if let Some("kill-all") = std::env::args().skip(1).next().as_deref() {
+    if let Some("kill-all") = std::env::args().nth(1).as_deref() {
         args.next();
     }
-
     let args = KillArgs::parse_from(args);
 
     let mut projects = analyze_all_projects(
@@ -69,12 +68,7 @@ fn main() {
         args.project_type.clone(),
     );
 
-    let mut _options: Vec<&str> = vec![];
-
     projects.sort_by_key(|p| Reverse(p.size));
-
-    // Directory name to delete
-    let (_, target_directory_name) = utils::get_project_indentifiers(args.project_type.clone());
 
     // Transform vector to string to better display directry data
     let options = projects
@@ -120,7 +114,7 @@ fn main() {
     }
 
     // Exit if no projects are selected
-    if selected_projects.len() == 0 {
+    if selected_projects.is_empty() {
         println!("No projects selected, exiting ...");
         return;
     }
@@ -139,7 +133,10 @@ fn main() {
                 return;
             }
             Ok(true) => {}
-            Err(_) => println!("Error"),
+            Err(_) => {
+                println!("No cleanup ahead");
+                return;
+            }
         }
     }
 
@@ -149,12 +146,12 @@ fn main() {
     );
 
     selected_projects.iter().for_each(|p| {
-        match remove_dir_all::remove_dir_all(&p.project_path.join(target_directory_name)) {
-            Ok(_) => {}
-            Err(e) => {
+        for target in &p.targets {
+            let dir = p.project_path.join(target);
+            if let Err(e) = remove_dir_all::remove_dir_all(&dir) {
                 eprintln!(
                     "Directory Deletion failed for {} \n {}",
-                    p.project_path.to_string_lossy(),
+                    dir.to_string_lossy(),
                     e
                 );
             }

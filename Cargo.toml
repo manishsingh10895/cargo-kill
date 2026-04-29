@@ -1,12 +1,11 @@
 [package]
 name = "cargo-kill-all"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["manishsingh10895 <manishsingh10895@gmail.com>"]
 description = "Remove old node_modules, cargo target to save space"
 readme = "README.md"
 repository = "https://github.com/manishsingh10895/cargo-kill"
-rust_version = "1.81.0"
 license = "MIT OR Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -15,9 +14,10 @@ license = "MIT OR Apache-2.0"
 bytefmt = "0.1.7"
 chrono = "0.4.38"
 clap = { version = "4.5.20", features = ["derive"] }
-colored = "2.1.0"
+colored = "3.1.1"
 crossbeam-channel = "0.5.13"
 num_cpus = "1.16.0"
-remove_dir_all = "0.8.4"
+remove_dir_all = "1.0.0"
 spinners = "4.1.1"
-inquire = "0.7.5"
+inquire = "0.9.4"
+serde_json = "1"
