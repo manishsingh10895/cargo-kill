@@ -93,7 +93,7 @@ TOML
 fill "$ROOT/rust/crate-b/target/release/placeholder" 1024
 fill "$ROOT/rust/crate-b/src/main.rs" 1
 
-# A cargo project with no target/ — should not appear in npm or cargo runs
+# A cargo project with no target/ — should not appear in any run
 mkdir -p "$ROOT/rust/crate-no-build/src"
 cat > "$ROOT/rust/crate-no-build/Cargo.toml" <<'TOML'
 [package]
@@ -103,24 +103,47 @@ edition = "2021"
 TOML
 fill "$ROOT/rust/crate-no-build/src/main.rs" 1
 
+# A combined cargo + npm project (e.g. wasm-bindgen) — exercises multi-detector union
+mkdir -p "$ROOT/combo/src"
+cat > "$ROOT/combo/Cargo.toml" <<'TOML'
+[package]
+name = "combo"
+version = "0.1.0"
+edition = "2021"
+TOML
+cat > "$ROOT/combo/package.json" <<'JSON'
+{"name":"combo","dependencies":{"next":"14"}}
+JSON
+fill "$ROOT/combo/target/debug/placeholder"     2048
+fill "$ROOT/combo/node_modules/placeholder"     1024
+fill "$ROOT/combo/.next/placeholder"             512
+
+# A standalone .git checkout (no Cargo.toml, no package.json) — only visible with --include-git
+mkdir -p "$ROOT/git-only/.git/objects"
+fill "$ROOT/git-only/.git/objects/big" 800
+fill "$ROOT/git-only/README.md" 1
+
 cat <<EOF
 
 Sample tree created at: $ROOT
 
 Try it:
-  cargo-kill-all $ROOT -p npm   -d   # dry run, npm projects + framework caches
-  cargo-kill-all $ROOT -p cargo -d   # dry run, cargo projects
+  cargo-kill-all $ROOT -d                  # dry run, all detectors
+  cargo-kill-all $ROOT -d --include-git    # also surface .git directories
 
-Expected npm rows:
-  next-app       node_modules, .next
-  svelte-app     node_modules, .svelte-kit
-  nuxt-app       node_modules, .nuxt, .output
-  plain-node     node_modules
-  broken-json    node_modules         (malformed package.json, graceful fallback)
+Expected rows (no --include-git):
+  next-app       npm         node_modules, .next
+  svelte-app     npm         node_modules, .svelte-kit
+  nuxt-app       npm         node_modules, .nuxt, .output
+  plain-node     npm         node_modules
+  broken-json    npm         node_modules                    (malformed package.json, graceful fallback)
+  combo          cargo, npm  target, node_modules, .next     (multi-kind union)
+  crate-a        cargo       target
+  crate-b        cargo       target
 
-Expected cargo rows:
-  crate-a        target
-  crate-b        target
+Additional rows with --include-git:
+  git-only       git         .git                            (no other identifier)
+  ... and ".git" appended to any of the above whose dir contains a .git
 
 Clean up when done:
   $0 --clean $ROOT

@@ -6,22 +6,24 @@ use std::{
 
 use crossbeam_channel::Sender;
 
-use crate::{utils, ProjectType};
+use crate::utils::PROJECT_KINDS;
 
 const EXCLUDE_DIRS: [&str; 4] = [".git", "node_modules", ".vscode", "src"];
 
-/// Folder Details
+/// Per-project analysis result.
 #[derive(Debug)]
 pub struct ProjectTargetAnalysis {
-    /// Path of the project
+    /// Path of the project root.
     pub project_path: PathBuf,
-    /// Target directory names (relative to `project_path`) that exist and were
-    /// included in the analysis. May contain `node_modules` plus framework
-    /// caches like `.next`, `.svelte-kit`, etc.
+    /// Detector names that matched (e.g. `["cargo"]`, `["npm"]`,
+    /// `["cargo", "npm"]`, or `["git"]` for a `.git`-only directory).
+    pub kinds: Vec<&'static str>,
+    /// Target directory names (relative to `project_path`) that exist and
+    /// were included in the analysis.
     pub targets: Vec<&'static str>,
     /// Sum of bytes across all `targets`.
     pub size: u64,
-    /// Last Modified of the folder
+    /// Newest mtime seen across all `targets`.
     #[allow(dead_code)]
     last_modified: SystemTime,
 }
@@ -31,8 +33,9 @@ impl Display for ProjectTargetAnalysis {
         let size = bytefmt::format(self.size);
         write!(
             f,
-            "{0} \t| {1} \t| {2}",
+            "{0} \t| {1} \t| {2} \t| {3}",
             self.project_path.to_string_lossy(),
+            self.kinds.join(", "),
             self.targets.join(", "),
             size,
         )
@@ -41,13 +44,12 @@ impl Display for ProjectTargetAnalysis {
 
 struct Job {
     path: PathBuf,
-    project_type: ProjectType,
     include_git: bool,
     job_sender: Sender<Job>,
 }
 
 impl ProjectTargetAnalysis {
-    fn analyze(path: &Path, targets: Vec<&'static str>) -> Self {
+    fn analyze(path: &Path, kinds: Vec<&'static str>, targets: Vec<&'static str>) -> Self {
         let mut total_size: u64 = 0;
         let mut newest = SystemTime::UNIX_EPOCH;
         for t in &targets {
@@ -58,20 +60,18 @@ impl ProjectTargetAnalysis {
 
         ProjectTargetAnalysis {
             project_path: path.to_path_buf(),
+            kinds,
             targets,
             size: total_size,
             last_modified: newest,
         }
     }
 
-    /// Recursive scan `target` folder and
-    /// Scan for folder `size` and `last_modified`
+    /// Recursively measure size and newest mtime of a directory, treating
+    /// errors as empty subtrees. Does not follow symlinks.
     fn recursive_scan_target(path: &Path) -> (u64, SystemTime) {
         let default = (0, SystemTime::UNIX_EPOCH);
 
-        // symlink_metadata does not follow symlinks — needed to skip them
-        // explicitly so cycles can't cause infinite recursion and symlinked
-        // dirs aren't double-counted toward the parent's size.
         let md = match path.symlink_metadata() {
             Ok(md) => md,
             Err(_) => return default,
@@ -98,22 +98,17 @@ impl ProjectTargetAnalysis {
             .map(|path| Self::recursive_scan_target(&path))
             .fold(default, |a, b| (a.0.saturating_add(b.0), a.1.max(b.1)))
     }
-
-    // Analyze size and last_modified of the folders
 }
 
-/// Find projects in the given path
-/// that match the given `ProjectType`
-/// and send the results to the `results` channel
+/// Walk one directory, schedule jobs for its subdirectories, and emit a
+/// `ProjectTargetAnalysis` if this directory looks like a project root for
+/// any registered detector (or, with `--include-git`, if it contains `.git`).
 fn find_projects_in_path(
     path: &Path,
-    project_type: ProjectType,
     include_git: bool,
     job_sender: Sender<Job>,
     results: Sender<ProjectTargetAnalysis>,
 ) {
-    let project_identifier = utils::project_identifier(&project_type);
-
     let read_dir = match path.read_dir() {
         Ok(it) => it,
         Err(e) => {
@@ -130,29 +125,39 @@ fn find_projects_in_path(
         .filter_map(|it| it.ok().map(|it| it.path()))
         .partition(|it| it.is_dir());
 
-    let has_project_identifier = files
+    let file_names: Vec<String> = files
         .iter()
-        .any(|file| file.file_name().unwrap_or_default().to_string_lossy() == project_identifier);
-
-    // Per-project candidate target list (e.g. for npm: node_modules + framework caches
-    // declared in package.json). Empty for non-projects.
-    let candidate_targets: Vec<&'static str> = if has_project_identifier {
-        let mut t = utils::target_dirs_for(&project_type, path);
-        if include_git {
-            t.push(".git");
-        }
-        t
-    } else {
-        vec![]
-    };
-
+        .map(|f| f.file_name().unwrap_or_default().to_string_lossy().into_owned())
+        .collect();
     let dir_names: Vec<String> = dirs
         .iter()
         .map(|d| d.file_name().unwrap_or_default().to_string_lossy().into_owned())
         .collect();
 
-    // Targets that actually exist on disk for this project, preserving the
-    // candidate ordering.
+    // Apply every detector. A dir can match multiple kinds.
+    let mut kinds: Vec<&'static str> = Vec::new();
+    let mut candidate_targets: Vec<&'static str> = Vec::new();
+    for kind in PROJECT_KINDS {
+        if file_names.iter().any(|n| n == kind.identifier) {
+            kinds.push(kind.name);
+            for t in (kind.targets)(path) {
+                if !candidate_targets.contains(&t) {
+                    candidate_targets.push(t);
+                }
+            }
+        }
+    }
+
+    // .git is a target on its own when --include-git is set. Any directory
+    // containing .git becomes a project even without another identifier.
+    let has_git = dir_names.iter().any(|n| n == ".git");
+    if include_git && has_git {
+        kinds.push("git");
+        if !candidate_targets.contains(&".git") {
+            candidate_targets.push(".git");
+        }
+    }
+
     let found_targets: Vec<&'static str> = candidate_targets
         .iter()
         .copied()
@@ -163,8 +168,8 @@ fn find_projects_in_path(
         if EXCLUDE_DIRS.contains(&filename.as_str()) {
             continue;
         }
-        // Don't recurse into this project's own target directories — they're
-        // already accounted for and shouldn't be scanned as separate projects.
+        // Don't recurse into dirs we've already accounted for as targets of
+        // this project (framework caches, target/, node_modules, etc.).
         if candidate_targets.iter().any(|t| *t == filename) {
             continue;
         }
@@ -172,7 +177,6 @@ fn find_projects_in_path(
         job_sender
             .send(Job {
                 path: dir.to_path_buf(),
-                project_type: project_type.clone(),
                 include_git,
                 job_sender: job_sender.clone(),
             })
@@ -185,18 +189,18 @@ fn find_projects_in_path(
             format!("Analyzing {}", &path.to_string_lossy()),
         );
         results
-            .send(ProjectTargetAnalysis::analyze(path, found_targets))
+            .send(ProjectTargetAnalysis::analyze(path, kinds, found_targets))
             .unwrap();
         sp.stop_with_symbol("✓");
         println!("\r");
     }
 }
 
-/// Traverse and look for `ProjectType` projects
+/// Scan `path` recursively, detecting every supported project kind in one
+/// pass. With `include_git`, also surfaces any directory containing `.git`.
 pub fn analyze_all_projects(
     path: &Path,
     mut num_threads: usize,
-    project_type: ProjectType,
     include_git: bool,
 ) -> Vec<ProjectTargetAnalysis> {
     num_threads = std::cmp::min(num_cpus::get(), num_threads);
@@ -215,7 +219,6 @@ pub fn analyze_all_projects(
                     jr.into_iter().for_each(|job| {
                         find_projects_in_path(
                             &job.path,
-                            job.project_type,
                             job.include_git,
                             job.job_sender,
                             rs.clone(),
@@ -228,7 +231,6 @@ pub fn analyze_all_projects(
             .clone()
             .send(Job {
                 path: path.to_path_buf(),
-                project_type,
                 include_git,
                 job_sender,
             })

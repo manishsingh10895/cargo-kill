@@ -12,21 +12,13 @@ use std::path::Path;
 mod find;
 mod utils;
 
-#[derive(Debug, clap::ValueEnum, Clone)]
-pub enum ProjectType {
-    // It is a rust (cargo) project
-    Cargo,
-    // It is a node project
-    Npm,
-}
-
 #[derive(Debug, Parser)]
 #[clap(
     author,
     version,
     about,
     bin_name = "cargo kill-all",
-    long_about = "Cleans cargo directories"
+    long_about = "Scan a directory tree for cargo and npm projects (and optionally .git directories) and reclaim their build/cache space."
 )]
 struct KillArgs {
     /// Starting directory to clean
@@ -48,11 +40,9 @@ struct KillArgs {
     )]
     num_threads: usize,
 
-    #[clap(short = 'p', long = "project-type", value_enum, default_value_t = ProjectType::Cargo)]
-    project_type: ProjectType,
-
-    /// Also include each project's `.git` directory as a deletion candidate.
-    /// Destructive: this wipes the repository's local history. Off by default.
+    /// Also list each detected project's `.git` directory as a deletion
+    /// candidate, and surface bare `.git` directories that aren't otherwise
+    /// recognized as a project. Destructive: wipes local repo history.
     #[clap(long = "include-git")]
     include_git: bool,
 }
@@ -70,7 +60,6 @@ fn main() {
     let mut projects = analyze_all_projects(
         &Path::new(&args.root_dir),
         args.num_threads,
-        args.project_type.clone(),
         args.include_git,
     );
 

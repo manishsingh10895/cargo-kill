@@ -1,9 +1,9 @@
 [package]
 name = "cargo-kill-all"
-version = "0.3.5"
+version = "0.4.0"
 edition = "2021"
 authors = ["manishsingh10895 <manishsingh10895@gmail.com>"]
-description = "Remove old node_modules, cargo target to save space"
+description = "Reclaim disk space from build/cache directories across cargo and npm projects, in one pass"
 readme = "README.md"
 repository = "https://github.com/manishsingh10895/cargo-kill"
 license = "MIT OR Apache-2.0"

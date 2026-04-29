@@ -1,6 +1,6 @@
 # Cargo Kill
 
-### Remove `target` / `node_modules` (and framework caches) recursively from directories
+### Reclaim disk space from build/cache directories across cargo and npm projects, in one pass
 
 ## Installation
 
@@ -8,34 +8,47 @@
 
 ## Usage
 
-> `cargo-kill-all /home/Documents/ -t 4 -p [npm/cargo]`
+> `cargo-kill-all /home/Documents/ -t 4`
 
-Use `-p npm` to clean Node projects and `-p cargo` to clean **cargo** projects.
+A single pass scans the tree and lists every detected project. No project-type
+flag is needed — cargo and npm projects show up together, and a directory
+matching multiple kinds (e.g. `Cargo.toml` + `package.json`) appears once with
+all its targets unioned.
 
 ### What gets cleaned
 
-- **`-p cargo`** — `target/` next to every `Cargo.toml`.
-- **`-p npm`** — `node_modules/` next to every `package.json`, plus framework
-  build/cache directories detected by parsing the project's `package.json`
-  dependencies:
+| Kind  | Identifier     | Targets                                                          |
+| ----- | -------------- | ---------------------------------------------------------------- |
+| cargo | `Cargo.toml`   | `target/`                                                        |
+| npm   | `package.json` | `node_modules/` plus framework caches (see table below)          |
 
-  | Dependency       | Cache directories       |
-  | ---------------- | ----------------------- |
-  | `next`           | `.next`                 |
-  | `nuxt` / `nuxt3` | `.nuxt`, `.output`      |
-  | `@sveltejs/kit`  | `.svelte-kit`           |
+For npm projects, framework caches are inferred from `dependencies` and
+`devDependencies` in `package.json`:
 
-  Each project shows up as a single selectable row whose size is the sum of
-  all its detected directories; selecting it removes all of them. Projects
-  with no recognized framework dep just clean `node_modules` as before.
+| Dependency       | Cache directories       |
+| ---------------- | ----------------------- |
+| `next`           | `.next`                 |
+| `nuxt` / `nuxt3` | `.nuxt`, `.output`      |
+| `@sveltejs/kit`  | `.svelte-kit`           |
+
+Each detected project is a single selectable row whose size is the sum of all
+its detected directories; selecting it removes all of them.
+
+More detector kinds (flutter, gradle, etc.) can be added by appending entries
+to `PROJECT_KINDS` in [src/utils.rs](src/utils.rs).
 
 ### Including `.git`
 
-Pass `--include-git` to also list each project's `.git` directory as a
-deletion candidate. Only `.git` directories that sit alongside a detected
-project (`Cargo.toml` or `package.json`) are considered. **This wipes the
-local repository history** — you will see `.git` listed in the project's row
-before confirming.
+Pass `--include-git` to also surface `.git` directories. With this flag:
+
+- Any directory containing `.git` becomes a row, **even without** a
+  `Cargo.toml`/`package.json` — useful for cleaning out abandoned local
+  checkouts.
+- For projects already detected by another kind, `.git` is appended to that
+  project's targets list.
+
+**This wipes local repository history.** The `.git` entry is shown in the
+row's targets before the confirmation prompt.
 
 ![Usage](./usage.png "Usage")
 

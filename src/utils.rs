@@ -1,6 +1,40 @@
 use std::path::Path;
 
-use crate::ProjectType;
+/// A kind of project the scanner can detect. Add new entries to
+/// [`PROJECT_KINDS`] to support more ecosystems (flutter, gradle, etc.).
+pub struct ProjectKind {
+    /// Short name shown to the user, e.g. "cargo", "npm".
+    pub name: &'static str,
+    /// File at the project root that identifies this kind.
+    pub identifier: &'static str,
+    /// Returns the candidate target directory names (relative to the project
+    /// root) for this kind. Called once per detected project; allowed to
+    /// inspect files at `project_root` (e.g. parse package.json).
+    pub targets: fn(&Path) -> Vec<&'static str>,
+}
+
+pub const PROJECT_KINDS: &[ProjectKind] = &[
+    ProjectKind {
+        name: "cargo",
+        identifier: "Cargo.toml",
+        targets: cargo_targets,
+    },
+    ProjectKind {
+        name: "npm",
+        identifier: "package.json",
+        targets: npm_targets,
+    },
+];
+
+fn cargo_targets(_root: &Path) -> Vec<&'static str> {
+    vec!["target"]
+}
+
+fn npm_targets(root: &Path) -> Vec<&'static str> {
+    let mut dirs = vec!["node_modules"];
+    dirs.extend(npm_framework_targets(&root.join("package.json")));
+    dirs
+}
 
 // Maps an npm dependency name to one or more cache directories it produces.
 const NPM_FRAMEWORK_MAP: &[(&str, &[&str])] = &[
@@ -9,29 +43,6 @@ const NPM_FRAMEWORK_MAP: &[(&str, &[&str])] = &[
     ("nuxt3", &[".nuxt", ".output"]),
     ("@sveltejs/kit", &[".svelte-kit"]),
 ];
-
-/// File at the project root that identifies the project type.
-pub fn project_identifier(project_type: &ProjectType) -> &'static str {
-    match project_type {
-        ProjectType::Cargo => "Cargo.toml",
-        ProjectType::Npm => "package.json",
-    }
-}
-
-/// All target directory names that should be considered for cleanup at the
-/// given project root. The first entry is always the canonical one
-/// (`target` / `node_modules`); for npm, framework caches are appended based
-/// on the project's `package.json` dependencies.
-pub fn target_dirs_for(project_type: &ProjectType, project_root: &Path) -> Vec<&'static str> {
-    match project_type {
-        ProjectType::Cargo => vec!["target"],
-        ProjectType::Npm => {
-            let mut dirs = vec!["node_modules"];
-            dirs.extend(npm_framework_targets(&project_root.join("package.json")));
-            dirs
-        }
-    }
-}
 
 fn npm_framework_targets(package_json: &Path) -> Vec<&'static str> {
     let text = match std::fs::read_to_string(package_json) {
