@@ -24,6 +24,11 @@ pub const PROJECT_KINDS: &[ProjectKind] = &[
         identifier: "package.json",
         targets: npm_targets,
     },
+    ProjectKind {
+        name: "flutter",
+        identifier: "pubspec.yaml",
+        targets: flutter_targets,
+    },
 ];
 
 fn cargo_targets(_root: &Path) -> Vec<&'static str> {
@@ -34,6 +39,12 @@ fn npm_targets(root: &Path) -> Vec<&'static str> {
     let mut dirs = vec!["node_modules"];
     dirs.extend(npm_framework_targets(&root.join("package.json")));
     dirs
+}
+
+fn flutter_targets(_root: &Path) -> Vec<&'static str> {
+    // Both directories are generated locally and recreated by `flutter pub
+    // get`/`flutter build`. Keep pubspec.lock and the global pub cache intact.
+    vec![".dart_tool", "build"]
 }
 
 // Maps an npm dependency name to one or more cache directories it produces.
@@ -70,4 +81,23 @@ fn npm_framework_targets(package_json: &Path) -> Vec<&'static str> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flutter_projects_are_registered_with_regenerable_targets() {
+        let flutter = PROJECT_KINDS
+            .iter()
+            .find(|kind| kind.name == "flutter")
+            .expect("flutter project detector should be registered");
+
+        assert_eq!(flutter.identifier, "pubspec.yaml");
+        assert_eq!(
+            (flutter.targets)(Path::new(".")),
+            vec![".dart_tool", "build"]
+        );
+    }
 }

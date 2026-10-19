@@ -127,11 +127,21 @@ fn find_projects_in_path(
 
     let file_names: Vec<String> = files
         .iter()
-        .map(|f| f.file_name().unwrap_or_default().to_string_lossy().into_owned())
+        .map(|f| {
+            f.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        })
         .collect();
     let dir_names: Vec<String> = dirs
         .iter()
-        .map(|d| d.file_name().unwrap_or_default().to_string_lossy().into_owned())
+        .map(|d| {
+            d.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        })
         .collect();
 
     // Apply every detector. A dir can match multiple kinds.
@@ -240,4 +250,35 @@ pub fn analyze_all_projects(
     }
     .into_iter()
     .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn detects_and_measures_flutter_generated_directories() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("cargo-kill-flutter-{unique}"));
+        fs::create_dir_all(root.join(".dart_tool")).unwrap();
+        fs::create_dir_all(root.join("build")).unwrap();
+        fs::write(root.join("pubspec.yaml"), "name: example\n").unwrap();
+        fs::write(root.join(".dart_tool/package_config.json"), b"abc").unwrap();
+        fs::write(root.join("build/app.bin"), b"defg").unwrap();
+
+        let projects = analyze_all_projects(&root, 1, false);
+
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].project_path, root);
+        assert_eq!(projects[0].kinds, vec!["flutter"]);
+        assert_eq!(projects[0].targets, vec![".dart_tool", "build"]);
+        assert_eq!(projects[0].size, 7);
+
+        fs::remove_dir_all(&projects[0].project_path).unwrap();
+    }
 }

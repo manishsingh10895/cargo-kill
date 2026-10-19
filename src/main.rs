@@ -1,5 +1,4 @@
 use crate::find::{analyze_all_projects, ProjectTargetAnalysis};
-use bytefmt;
 use clap::Parser;
 use inquire::{
     list_option::ListOption,
@@ -18,7 +17,7 @@ mod utils;
     version,
     about,
     bin_name = "cargo kill-all",
-    long_about = "Scan a directory tree for cargo and npm projects (and optionally .git directories) and reclaim their build/cache space."
+    long_about = "Scan a directory tree for cargo, npm, and Flutter projects (and optionally .git directories) and reclaim their build/cache space."
 )]
 struct KillArgs {
     /// Starting directory to clean
@@ -58,7 +57,7 @@ fn main() {
     let args = KillArgs::parse_from(args);
 
     let mut projects = analyze_all_projects(
-        &Path::new(&args.root_dir),
+        Path::new(&args.root_dir),
         args.num_threads,
         args.include_git,
     );
