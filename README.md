@@ -15,6 +15,16 @@ flag is needed — cargo, npm, and Flutter projects show up together, and a dire
 matching multiple kinds (e.g. `Cargo.toml` + `package.json`) appears once with
 all its targets unioned.
 
+To limit the scan, repeat `--project-type` (or `-p`) or pass a comma-separated
+list. `--kind` is also accepted as an alias:
+
+```console
+cargo-kill-all ~/projects -p cargo,npm
+cargo-kill-all ~/projects --kind cargo --kind flutter
+```
+
+Supported values are `all`, `cargo`, `npm`, and `flutter`; `all` is the default.
+
 ### What gets cleaned
 
 | Kind  | Identifier     | Targets                                                          |

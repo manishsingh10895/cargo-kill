@@ -1,6 +1,7 @@
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
+    sync::Arc,
     time::SystemTime,
 };
 
@@ -45,6 +46,7 @@ impl Display for ProjectTargetAnalysis {
 struct Job {
     path: PathBuf,
     include_git: bool,
+    enabled_kinds: Arc<Vec<&'static str>>,
     job_sender: Sender<Job>,
 }
 
@@ -106,6 +108,7 @@ impl ProjectTargetAnalysis {
 fn find_projects_in_path(
     path: &Path,
     include_git: bool,
+    enabled_kinds: Arc<Vec<&'static str>>,
     job_sender: Sender<Job>,
     results: Sender<ProjectTargetAnalysis>,
 ) {
@@ -148,6 +151,9 @@ fn find_projects_in_path(
     let mut kinds: Vec<&'static str> = Vec::new();
     let mut candidate_targets: Vec<&'static str> = Vec::new();
     for kind in PROJECT_KINDS {
+        if !enabled_kinds.contains(&kind.name) {
+            continue;
+        }
         if file_names.iter().any(|n| n == kind.identifier) {
             kinds.push(kind.name);
             for t in (kind.targets)(path) {
@@ -188,6 +194,7 @@ fn find_projects_in_path(
             .send(Job {
                 path: dir.to_path_buf(),
                 include_git,
+                enabled_kinds: enabled_kinds.clone(),
                 job_sender: job_sender.clone(),
             })
             .unwrap();
@@ -212,6 +219,7 @@ pub fn analyze_all_projects(
     path: &Path,
     mut num_threads: usize,
     include_git: bool,
+    enabled_kinds: &[&'static str],
 ) -> Vec<ProjectTargetAnalysis> {
     num_threads = std::cmp::min(num_cpus::get(), num_threads);
 
@@ -230,6 +238,7 @@ pub fn analyze_all_projects(
                         find_projects_in_path(
                             &job.path,
                             job.include_git,
+                            job.enabled_kinds,
                             job.job_sender,
                             rs.clone(),
                         )
@@ -242,6 +251,7 @@ pub fn analyze_all_projects(
             .send(Job {
                 path: path.to_path_buf(),
                 include_git,
+                enabled_kinds: Arc::new(enabled_kinds.to_vec()),
                 job_sender,
             })
             .unwrap();
@@ -271,7 +281,7 @@ mod tests {
         fs::write(root.join(".dart_tool/package_config.json"), b"abc").unwrap();
         fs::write(root.join("build/app.bin"), b"defg").unwrap();
 
-        let projects = analyze_all_projects(&root, 1, false);
+        let projects = analyze_all_projects(&root, 1, false, &["flutter"]);
 
         assert_eq!(projects.len(), 1);
         assert_eq!(projects[0].project_path, root);
@@ -280,5 +290,28 @@ mod tests {
         assert_eq!(projects[0].size, 7);
 
         fs::remove_dir_all(&projects[0].project_path).unwrap();
+    }
+
+    #[test]
+    fn scans_only_the_selected_project_kinds() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("cargo-kill-kinds-{unique}"));
+        for target in ["target", "node_modules", ".dart_tool", "build"] {
+            fs::create_dir_all(root.join(target)).unwrap();
+        }
+        fs::write(root.join("Cargo.toml"), "[package]\nname = \"example\"\n").unwrap();
+        fs::write(root.join("package.json"), "{}").unwrap();
+        fs::write(root.join("pubspec.yaml"), "name: example\n").unwrap();
+
+        let projects = analyze_all_projects(&root, 1, false, &["cargo", "flutter"]);
+
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].kinds, vec!["cargo", "flutter"]);
+        assert_eq!(projects[0].targets, vec!["target", ".dart_tool", "build"]);
+
+        fs::remove_dir_all(&root).unwrap();
     }
 }

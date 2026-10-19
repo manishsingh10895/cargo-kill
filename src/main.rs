@@ -1,5 +1,5 @@
 use crate::find::{analyze_all_projects, ProjectTargetAnalysis};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use inquire::{
     list_option::ListOption,
     ui::{IndexPrefix, RenderConfig},
@@ -10,6 +10,36 @@ use std::path::Path;
 
 mod find;
 mod utils;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum ProjectType {
+    All,
+    Cargo,
+    Npm,
+    Flutter,
+}
+
+impl ProjectType {
+    fn selected_names(project_types: &[Self]) -> Vec<&'static str> {
+        if project_types.contains(&Self::All) {
+            return utils::PROJECT_KINDS.iter().map(|kind| kind.name).collect();
+        }
+
+        let mut names = Vec::new();
+        for project_type in project_types {
+            let name = match project_type {
+                Self::All => unreachable!("all project types handled above"),
+                Self::Cargo => "cargo",
+                Self::Npm => "npm",
+                Self::Flutter => "flutter",
+            };
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        names
+    }
+}
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -39,6 +69,17 @@ struct KillArgs {
     )]
     num_threads: usize,
 
+    /// Project kinds to scan (repeat the option or use comma-separated values)
+    #[clap(
+        short = 'p',
+        long = "project-type",
+        visible_alias = "kind",
+        value_enum,
+        value_delimiter = ',',
+        default_value = "all"
+    )]
+    project_types: Vec<ProjectType>,
+
     /// Also list each detected project's `.git` directory as a deletion
     /// candidate, and surface bare `.git` directories that aren't otherwise
     /// recognized as a project. Destructive: wipes local repo history.
@@ -55,11 +96,13 @@ fn main() {
         args.next();
     }
     let args = KillArgs::parse_from(args);
+    let selected_kinds = ProjectType::selected_names(&args.project_types);
 
     let mut projects = analyze_all_projects(
         Path::new(&args.root_dir),
         args.num_threads,
         args.include_git,
+        &selected_kinds,
     );
 
     projects.sort_by_key(|p| Reverse(p.size));
@@ -153,4 +196,37 @@ fn main() {
     });
 
     sp.stop_with_message(String::from("DONE"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scans_all_project_types_by_default() {
+        let args = KillArgs::try_parse_from(["cargo-kill-all"]).unwrap();
+
+        assert_eq!(args.project_types, vec![ProjectType::All]);
+        assert_eq!(
+            ProjectType::selected_names(&args.project_types),
+            vec!["cargo", "npm", "flutter"]
+        );
+    }
+
+    #[test]
+    fn accepts_repeated_and_comma_separated_project_types() {
+        let args = KillArgs::try_parse_from([
+            "cargo-kill-all",
+            "--project-type",
+            "cargo,npm",
+            "--kind",
+            "flutter",
+        ])
+        .unwrap();
+
+        assert_eq!(
+            ProjectType::selected_names(&args.project_types),
+            vec!["cargo", "npm", "flutter"]
+        );
+    }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "cargo-kill-all"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 authors = ["manishsingh10895 <manishsingh10895@gmail.com>"]
 description = "Reclaim disk space from build/cache directories across cargo, npm, and Flutter projects, in one pass"
